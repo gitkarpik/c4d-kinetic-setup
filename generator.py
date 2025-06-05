@@ -10,11 +10,10 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 
 # Version 0.2.0 (Alpha)
-#added stepping on lift field
+# default positions now taken from first frame
 
 
 #todo:
-#change default positions from 0 to fileds input of first frame
 
 #add string for export JSON
 #add refresh on export settings update!
@@ -223,8 +222,9 @@ def GetFieldData():
                     closest = min(snap_points, key=lambda x: abs(x - val))
                     frame_samples[name][i] = closest
             
-            #if frame == startFrame:
-            #    prev_frame_values[name] = frame_samples[name]
+            if frame == startFrame:
+                prev_frame_values[name] = frame_samples[name].copy()
+                prev_values[name] = frame_samples[name].copy()
 
         frame_samples["up"][0] = 0.0 #fixate lover ring to floor
         all_samples[frame] = frame_samples
