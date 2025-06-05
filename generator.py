@@ -9,15 +9,17 @@ from itertools import accumulate
 import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 
-# Version 0.1.13 (Alpha)
-#rotated all setup on 86.4 degrees
+# Version 0.2.0 (Alpha)
+#added stepping on lift field
 
 
 #todo:
-#stepping on lift field
 #change default positions from 0 to fileds input of first frame
+
+#add string for export JSON
 #add refresh on export settings update!
 # add auto rotation field
+
 
 
 fieldListExpand = op[c4d.ID_USERDATA, 2]
@@ -212,8 +214,19 @@ def GetFieldData():
             samp = field_list.SampleListSimple(op, input_field, c4d.FIELDSAMPLE_FLAG_VALUE)
             # Store the rounded values to avoid floating point precision issues
             frame_samples[name] = [round(samp._value[i]*100)/100 for i in range(len(samp._value))]
+            #here add snapping to 0., 0.333, 0.666, 1. for lift field
+            if name == "up":
+                for i in range(len(samp._value)):
+                    val = samp._value[i]
+                    # Find closest snap point
+                    snap_points = [0.0, 0.333, 0.666, 1.0]
+                    closest = min(snap_points, key=lambda x: abs(x - val))
+                    frame_samples[name][i] = closest
+            
+            #if frame == startFrame:
+            #    prev_frame_values[name] = frame_samples[name]
 
-        frame_samples["up"][0] = 0.0
+        frame_samples["up"][0] = 0.0 #fixate lover ring to floor
         all_samples[frame] = frame_samples
 
         sample_time += time.time() - sample_start_time
@@ -901,6 +914,8 @@ def main():
     sampExpand = fieldListExpand.SampleListSimple(op, inputFieldExpand, c4d.FIELDSAMPLE_FLAG_VALUE)
     sampRot = fieldListRot.SampleListSimple(op, inputFieldRot, c4d.FIELDSAMPLE_FLAG_VALUE)
     sampUp = fieldListUp.SampleListSimple(op, inputFieldUp, c4d.FIELDSAMPLE_FLAG_VALUE)
+    
+    sampUpSnapped = [min([0.0, 0.333, 0.666, 1.0], key=lambda x: abs(x - val)) for val in sampUp._value]
 
     hexagon_template = c4d.PolygonObject(hexPoints, 2)
     hexagon_pts, hex_uvs = create_hex_pts()
@@ -981,7 +996,7 @@ def main():
 
             current_circRad = c4d.utils.RangeMap(sampExpand._value[i//5], 0., 1., diameter_in, diameter_out, True) / 2.
 
-            height = c4d.utils.RangeMap(sampUp._value[ringIdx], 0., 1., 0, ringExpansion, False)
+            height = c4d.utils.RangeMap(sampUpSnapped[ringIdx], 0., 1., 0, ringExpansion, False)
             if(ringIdx == 0):
                 height = 0.0
             rowNulls[ringIdx].SetRelPos(c4d.Vector(0, height+ringHeight, 0))
@@ -1013,7 +1028,7 @@ def main():
                 visBox.SetMg(vis_mg)
                 visBox.InsertUnder(visNull)
             if(colorHelpers):
-                visColor = c4d.Vector(sampExpand._value[(i-2)//5], 0, sampUp._value[ringIdx])
+                visColor = c4d.Vector(sampExpand._value[(i-2)//5], 0, sampUpSnapped[ringIdx])
                 visBox[c4d.ID_BASEOBJECT_COLOR] = visColor
 
     #rootNull.SetDirty(c4d.DIRTYFLAGS_ALL)
