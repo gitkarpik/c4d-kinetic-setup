@@ -8,9 +8,10 @@ from itertools import accumulate
 
 import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
+from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.2.2 (Alpha)
-# fixed angle to 48.8
+# Version 0.3.0 (Alpha)
+# adding reading tokens
 
 
 #todo:
@@ -221,7 +222,7 @@ def GetFieldData():
                     snap_points = [0.0, 0.333, 0.666, 1.0]
                     closest = min(snap_points, key=lambda x: abs(x - val))
                     frame_samples[name][i] = closest
-            
+
             if frame == startFrame:
                 prev_frame_values[name] = frame_samples[name].copy()
                 prev_values[name] = frame_samples[name].copy()
@@ -828,6 +829,33 @@ def message(id, data):
         elif(buttID=='10'):
             field_data = GetFieldData()
             SaveFieldDataToJson(field_data)
+        elif(buttID=='23'):
+            field_data = GetFieldData()
+            SaveImageSequence(field_data)
+
+def SaveImageSequence(field_data):
+    #https://www.youtube.com/watch?v=R6_GQw-4tJY&t=310s
+    #https://developers.maxon.net/docs/py/2024_0_0a/modules/c4d.modules/tokensystem/index.html
+
+    doc = c4d.documents.GetActiveDocument()
+    renderData = doc.GetActiveRenderData()
+    renderSettings = renderData.GetDataInstance()
+    frame = doc.GetTime().GetFrame(doc.GetFps())  # Current frame, or use 1 if you want frame 1
+
+    rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': frame}
+    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png'))
+    
+    # Create directory if it doesn't exist
+    directory = os.path.dirname(filePath)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    print(filePath)
+    res = 600
+    texture = c4d.bitmaps.BaseBitmap()
+    texture.Init(res, res)
+    texture.SetPixel(res//2, res//2, 255,0,0)
+    texture.Save(filePath, c4d.FILTER_PNG)
 
 def create_hexagon(center_x, center_y, radius):
     points = []
@@ -914,7 +942,7 @@ def main():
     sampExpand = fieldListExpand.SampleListSimple(op, inputFieldExpand, c4d.FIELDSAMPLE_FLAG_VALUE)
     sampRot = fieldListRot.SampleListSimple(op, inputFieldRot, c4d.FIELDSAMPLE_FLAG_VALUE)
     sampUp = fieldListUp.SampleListSimple(op, inputFieldUp, c4d.FIELDSAMPLE_FLAG_VALUE)
-    
+
     sampUpSnapped = [min([0.0, 0.333, 0.666, 1.0], key=lambda x: abs(x - val)) for val in sampUp._value]
 
     hexagon_template = c4d.PolygonObject(hexPoints, 2)
@@ -941,7 +969,7 @@ def main():
 
         ringIdx = i // hexagonsPerRing
         hexIdx = i % hexagonsPerRing
-        angle = (2 * math.pi / hexCount) * hexIdx * ringsCount 
+        angle = (2 * math.pi / hexCount) * hexIdx * ringsCount
         angle += (ringIdx % 2) * 0.0628 * 5
         angle += 48.8 * math.pi / 180
 
