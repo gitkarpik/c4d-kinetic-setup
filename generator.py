@@ -9,8 +9,8 @@ from itertools import accumulate
 import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 
-# Version 0.2.0 (Alpha)
-# default positions now taken from first frame
+# Version 0.2.2 (Alpha)
+# fixed angle to 48.8
 
 
 #todo:
@@ -81,7 +81,7 @@ def create_sample_positions(ringsCount, hexagonsPerRing, ringHeight, base_circRa
             angle = (2 * math.pi / hexCount) * hexIdx * ringsCount
             angle += (ringIdx % 2) * 0.0628 * 5
 
-            angle -= 86.4 * math.pi / 180
+            angle += 48.8 * math.pi / 180
             samplePosList.append(c4d.Vector(
                 base_circRad * math.cos(angle),
                 ringHeight*(ringIdx),
@@ -689,7 +689,7 @@ def Bake(field_data):
                 angle = (2 * math.pi / hexCount) * hexIdx * ringsCount
                 angle += (ringIdx % 2) * 0.0628 * 5  # Offset for alternating rings
 
-                angle -= 86.4 * math.pi / 180
+                angle += 48.8 * math.pi / 180
                 baseYAngle = angle + math.pi/2.
 
                 matrix = c4d.Matrix()
@@ -737,7 +737,7 @@ def Bake(field_data):
                 angle = (2 * math.pi / hexCount) * hexIdx * ringsCount
                 angle += (ringIdx % 2) * 0.0628 * 5  # Offset for alternating rings
 
-                angle -= 86.4 * math.pi / 180
+                angle += 48.8 * math.pi / 180
                 pos_x_start = current_circRad * math.cos(angle)
                 pos_z_start = current_circRad * math.sin(angle)
 
@@ -943,7 +943,7 @@ def main():
         hexIdx = i % hexagonsPerRing
         angle = (2 * math.pi / hexCount) * hexIdx * ringsCount 
         angle += (ringIdx % 2) * 0.0628 * 5
-        angle -= 86.4 * math.pi / 180
+        angle += 48.8 * math.pi / 180
 
         if(displayScreens):
             poly_obj = hexagon_template.GetClone()
