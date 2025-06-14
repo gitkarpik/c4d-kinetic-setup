@@ -10,8 +10,9 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.3.0 (Alpha)
-# adding reading tokens
+# Version 0.3.1 (Alpha)
+# started map layout
+#add json path tokens (need to check)
 
 
 #todo:
@@ -294,7 +295,17 @@ def SaveJsonData(doc, filtered_data):
     project_name = doc.GetDocumentName()
     # Create the output file path in the same directory
     output_filename = "" + project_name[:-4] + ".json"
-    output_path = os.path.join(project_path, output_filename)
+
+
+        # Create directory if it doesn't exist
+    rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': startFrame}
+    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,32], rpd) + '.json')) 
+    directory = os.path.dirname(filePath)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+
+    output_path = filePath
 
     # Reorganize data into the new format
     fps = doc.GetFps()
@@ -833,29 +844,107 @@ def message(id, data):
             field_data = GetFieldData()
             SaveImageSequence(field_data)
 
+def SetSquare(texture, x, y, w, h, color):
+    for i in range(x, x+w):
+        for j in range(y, y+h):
+            texture.SetPixel(i, j, int(color[0]), int(color[1]), int(color[2]))
+
 def SaveImageSequence(field_data):
     #https://www.youtube.com/watch?v=R6_GQw-4tJY&t=310s
     #https://developers.maxon.net/docs/py/2024_0_0a/modules/c4d.modules/tokensystem/index.html
+    #original resolution 2500x1150
+    res = [2500, 1150]
+    res = [res[0]//2, res[1]//2]
 
     doc = c4d.documents.GetActiveDocument()
     renderData = doc.GetActiveRenderData()
     renderSettings = renderData.GetDataInstance()
     frame = doc.GetTime().GetFrame(doc.GetFps())  # Current frame, or use 1 if you want frame 1
 
-    rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': frame}
-    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png'))
-    
+    fps = doc.GetFps()
+    startFrame = doc.GetLoopMinTime().GetFrame(fps)
+    endFrame = doc.GetLoopMaxTime().GetFrame(fps)
+
+    #plan for the function:
+    #for all frames in range - run a loop
+    #then for each field data (expand, up, rotation) - find closest keyframe, from the left and from the right
+    #interpolate them with corresponding curves from user data 
+    #write onto pixel map, using the uv coordinates of the hexagon
+
+    # Map field data keys to object indices
+    expand_objects = {}
+    up_objects = {}
+    rotation_objects = {}
+    print(field_data)
+    # Process field data and create sets for keyframes
+    for key, data in field_data.items():
+        # Filter out the initial value entry
+        operations = [op for op in data["operations"] if "initial_value" not in op]
+        initial_value = [op for op in data["operations"] if "initial_value" in op]
+
+        filtered_data = {"operations": operations, "initial_value": initial_value[0]["initial_value"]}
+
+        if key.startswith("expand_"):
+            index = int(key.split("_")[1])
+            expand_objects[index] = filtered_data
+        elif key.startswith("up_"):
+            index = int(key.split("_")[1])
+            up_objects[index] = filtered_data
+        elif key.startswith("rotation_"):
+            index = int(key.split("_")[1])
+            rotation_objects[index] = filtered_data
+    print(expand_objects)
+
     # Create directory if it doesn't exist
+    rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': startFrame}
+    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png')) 
     directory = os.path.dirname(filePath)
     if not os.path.exists(directory):
         os.makedirs(directory)
-    
-    print(filePath)
-    res = 600
-    texture = c4d.bitmaps.BaseBitmap()
-    texture.Init(res, res)
-    texture.SetPixel(res//2, res//2, 255,0,0)
-    texture.Save(filePath, c4d.FILTER_PNG)
+
+    # Create directory if it doesn't exist
+    for fr in range(startFrame, endFrame):
+        rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': fr}
+        filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png')) 
+
+        texture = c4d.bitmaps.BaseBitmap()
+        texture.Init(res[0], res[1])
+        for i in range(hexCount):
+            ringIdx = i // hexagonsPerRing
+            hexIdx = i % hexagonsPerRing
+            # Find closest expand operations for current frame
+            expandId = i//5
+                # Get all operation frames for this hexagon
+            operation_frames = [op["frame"] for op in expand_objects[expandId]["operations"]]
+            #print(operation_frames, len(operation_frames))
+            # Find closest frames before and after current frame
+            left_frame = None
+            for frame in operation_frames:
+                if frame <= fr:
+                    if left_frame is None or frame > left_frame:
+                        left_frame = frame
+
+            # Get corresponding operations
+            left_operation = None
+            if left_frame is not None:
+                left_operation = next(op for op in expand_objects[expandId]["operations"] if op["frame"] == left_frame)
+                print("left_operation", left_operation)
+                print("fr", fr)
+                #print(left_frame, left_frame + int(left_operation["animation_length"]*fps))
+                frClamped = max(left_frame, min(fr, left_frame + int(left_operation["animation_length"])))
+                #find current frame of the expand movement
+                frameValue = c4d.utils.RangeMap(frClamped, 
+                    left_frame, left_frame + int(left_operation["animation_length"]), 
+                    left_operation["start_value"], left_operation["dest_value"], False, expandCurve)
+                print("frameValue", frameValue)
+            else:
+                frameValue = expand_objects[expandId]["initial_value"]
+            print("setsquare", int((res[0]/hexagonsPerRing)*hexIdx), int((res[1]/ringsCount)*ringIdx), int(res[0]//hexagonsPerRing), int(res[1]//ringsCount), c4d.Vector(frameValue*255, 0, 0))
+            SetSquare(texture,
+                int((res[0]/hexagonsPerRing*5)*hexIdx), int(res[1] - (res[1]/ringsCount)*ringIdx), 
+                int(res[0]/hexagonsPerRing*5), int(res[1]/ringsCount), 
+                c4d.Vector(frameValue*255, 0, 0))
+        texture.Save(filePath, c4d.FILTER_PNG)
 
 def create_hexagon(center_x, center_y, radius):
     points = []
