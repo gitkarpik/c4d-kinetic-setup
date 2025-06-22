@@ -832,7 +832,7 @@ def Bake(field_data):
 def message(id, data):
     if(id==c4d.MSG_DESCRIPTION_POSTSETPARAMETER):
         flId = eval(str(data['descid']))[1][0]
-        if flId in [2, 4, 5, 20, 16, 24, 25, 26]:
+        if flId in [2, 4, 5, 20, 16, 24, 25, 26, 27,7,6,8,28,21,29,30,17]:
             c4d.CallButton(op, c4d.OPYTHON_MAKEDIRTY)
             #fieldListExpand = op[c4d.ID_USERDATA, 2]
             #fieldListUp = op[c4d.ID_USERDATA, 4]
