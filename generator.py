@@ -10,14 +10,13 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.3.1 (Alpha)
-# started map layout
-#add json path tokens (need to check)
+# Version 0.3.2 (Alpha)
+# done beta PNG export
+
 
 
 #todo:
 
-#add string for export JSON
 #add refresh on export settings update!
 # add auto rotation field
 
@@ -850,10 +849,34 @@ def message(id, data):
             field_data = GetFieldData()
             SaveImageSequence(field_data)
 
-def SetSquare(texture, x, y, w, h, color):
+def DrawSquare(texture, x, y, w, h, color):
     for i in range(x, x+w):
         for j in range(y-h, y):
             texture.SetPixel(i, j, int(color[0]), int(color[1]), int(color[2]))
+
+def DrawPoly(texture, points, color):
+    # Find bounding box of polygon
+    min_x = min(p[0] for p in points)
+    max_x = max(p[0] for p in points)
+    min_y = min(p[1] for p in points)
+    max_y = max(p[1] for p in points)
+    
+    # For each pixel in bounding box
+    for x in range(int(min_x), int(max_x)+1):
+        for y in range(int(min_y), int(max_y)+1):
+            inside = False
+            j = len(points) - 1
+            
+            # Ray casting algorithm to determine if point is inside polygon
+            for i in range(len(points)):
+                if ((points[i][1] > y) != (points[j][1] > y) and
+                    x < (points[j][0] - points[i][0]) * (y - points[i][1]) / 
+                    (points[j][1] - points[i][1]) + points[i][0]):
+                    inside = not inside
+                j = i
+                    
+            if inside:
+                texture.SetPixel(x, y, int(color[0]), int(color[1]), int(color[2]))
 
 def SaveImageSequence(field_data):
     #https://www.youtube.com/watch?v=R6_GQw-4tJY&t=310s
@@ -881,7 +904,7 @@ def SaveImageSequence(field_data):
     expand_objects = {}
     up_objects = {}
     rotation_objects = {}
-    print(field_data)
+    #print(field_data)
     # Process field data and create sets for keyframes
     for key, data in field_data.items():
         # Filter out the initial value entry
@@ -930,7 +953,7 @@ def SaveImageSequence(field_data):
                     if left_frame is None or frame > left_frame:
                         left_frame = frame
 
-            # Get corresponding operations
+            # Get expand value
             left_operation = None
             if left_frame is not None:
                 left_operation = next(op for op in expand_objects[expandId]["operations"] if op["frame"] == left_frame)
@@ -942,15 +965,56 @@ def SaveImageSequence(field_data):
                 frameValue = c4d.utils.RangeMap(frClamped, 
                     left_frame, left_frame + int(left_operation["animation_length"]), 
                     left_operation["start_value"], left_operation["dest_value"], False, expandCurve)
-                frameValue = left_operation["dest_value"]
+                #frameValue = left_operation["dest_value"]
                 print("frameValue", frameValue)
             else:
                 frameValue = expand_objects[expandId]["initial_value"]
-            print("setsquare", int((res[0]/hexagonsPerRing)*hexIdx), int((res[1]/ringsCount)*ringIdx), int(res[0]//hexagonsPerRing), int(res[1]//ringsCount), c4d.Vector(frameValue*255, 0, 0))
-            SetSquare(texture,
-                int((res[0]/hexagonsPerRing)*hexIdx), int(res[1] - int(res[1]/ringsCount)*ringIdx), 
-                int(res[0]/hexagonsPerRing), int(res[1]/ringsCount), 
-                c4d.Vector(hexIdx/hexagonsPerRing*255*0, ringIdx/ringsCount*255*0, frameValue*255))
+            #get UV coordinates of the hexagon
+            hexagon_pts, hex_uvs = create_hex_pts()
+            my_uvs = []
+            uvHScale = -2.18159
+            for i in range(len(hex_uvs)):
+                my_uvs.append(c4d.Vector(hex_uvs[i][0]*1., hex_uvs[i][1]*uvHScale, 0.))
+            mult = 1 / 50.0
+            offUv = c4d.Vector(
+                (hexIdx + (ringIdx % 2) * 2.5),
+                (ringIdx)*0.757217*uvHScale + 50,
+                0.0
+            )
+            if((hexIdx>47) and (ringIdx % 2 == 1)):
+                offUv[0] = offUv[0] - 50.;
+
+            offUv1 = c4d.Vector(0.);
+            if((hexIdx==47) and (ringIdx % 2 == 1)):
+                offUv1[0] = -50;
+            polyUvs = [
+                (my_uvs[0] + offUv + offUv1) * mult,
+                (my_uvs[3] + offUv + offUv1) * mult,
+                (my_uvs[2] + offUv + offUv1) * mult,
+                (my_uvs[1] + offUv + offUv1) * mult
+            ]
+            # Transform UV coordinates (0-1) to pixel coordinates (0-res)
+            pixelUvs = []
+            for uv in polyUvs:
+                pixelUvs.append(c4d.Vector(round(uv.x * res[0]), round(uv.y * res[1]), 0))
+            DrawPoly(texture, pixelUvs, c4d.Vector(frameValue*255, 0, 0))
+
+            polyUvs = [
+                (my_uvs[0] + offUv) * mult,
+                (my_uvs[5] + offUv) * mult,
+                (my_uvs[4] + offUv) * mult,
+                (my_uvs[3] + offUv) * mult,
+            ]
+            pixelUvs = []   
+            for uv in polyUvs:
+                pixelUvs.append(c4d.Vector(round(uv.x * res[0]), round(uv.y * res[1]), 0))
+            DrawPoly(texture, pixelUvs, c4d.Vector(frameValue*255, 0, 0))
+
+            #print("setsquare", int((res[0]/hexagonsPerRing)*hexIdx), int((res[1]/ringsCount)*ringIdx), int(res[0]//hexagonsPerRing), int(res[1]//ringsCount), c4d.Vector(frameValue*255, 0, 0))
+            #DrawSquare(texture,
+            #    int((res[0]/hexagonsPerRing)*hexIdx), int(res[1] - int(res[1]/ringsCount)*ringIdx), 
+            #    int(res[0]/hexagonsPerRing), int(res[1]/ringsCount), 
+            #    c4d.Vector(hexIdx/hexagonsPerRing*255*0, ringIdx/ringsCount*255*0, frameValue*255))
         texture.Save(filePath, c4d.FILTER_PNG)
 
 def create_hexagon(center_x, center_y, radius):
