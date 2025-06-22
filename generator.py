@@ -184,9 +184,6 @@ def GetFieldData():
         for i in range(count):
             field_key = f"{prefix}{i}"
             field_data[field_key] = {"operations": []}
-            field_data[field_key]["operations"].append({
-                "initial_value": config["default_value"]
-            })
 
         prev_values[config["name"]] = [config["default_value"]] * count
         prev_frame_values[config["name"]] = [config["default_value"]] * count
@@ -211,6 +208,8 @@ def GetFieldData():
             name = config["name"]
             field_list = config["field_list"]
             input_field = config["input_field"]
+            prefix = config["prefix"]
+            count = config["count"]
 
             samp = field_list.SampleListSimple(op, input_field, c4d.FIELDSAMPLE_FLAG_VALUE)
             # Store the rounded values to avoid floating point precision issues
@@ -227,6 +226,10 @@ def GetFieldData():
             if frame == startFrame:
                 prev_frame_values[name] = frame_samples[name].copy()
                 prev_values[name] = frame_samples[name].copy()
+                for i in range(count):
+                    field_key = f"{prefix}{i}"
+                    field_data[field_key]["operations"].append({"initial_value": frame_samples[name][i]})
+
 
         frame_samples["up"][0] = 0.0 #fixate lover ring to floor
         all_samples[frame] = frame_samples
@@ -287,6 +290,7 @@ def GetFieldData():
     end_time = time.time()
     time_diff = end_time - processing_start_time
     print(f"Field data processing completed in {time_diff:.2f} seconds")
+    print(field_data)
     return field_data
 
 def SaveJsonData(doc, filtered_data):
@@ -297,8 +301,10 @@ def SaveJsonData(doc, filtered_data):
     output_filename = "" + project_name[:-4] + ".json"
 
 
-        # Create directory if it doesn't exist
-    rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': startFrame}
+    renderData = doc.GetActiveRenderData()
+    renderSettings = renderData.GetDataInstance()
+    frame = doc.GetTime().GetFrame(doc.GetFps()) 
+    rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': frame}
     filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,32], rpd) + '.json')) 
     directory = os.path.dirname(filePath)
     if not os.path.exists(directory):
@@ -846,7 +852,7 @@ def message(id, data):
 
 def SetSquare(texture, x, y, w, h, color):
     for i in range(x, x+w):
-        for j in range(y, y+h):
+        for j in range(y-h, y):
             texture.SetPixel(i, j, int(color[0]), int(color[1]), int(color[2]))
 
 def SaveImageSequence(field_data):
@@ -902,7 +908,7 @@ def SaveImageSequence(field_data):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    # Create directory if it doesn't exist
+        
     for fr in range(startFrame, endFrame):
         rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': fr}
         filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png')) 
@@ -936,14 +942,15 @@ def SaveImageSequence(field_data):
                 frameValue = c4d.utils.RangeMap(frClamped, 
                     left_frame, left_frame + int(left_operation["animation_length"]), 
                     left_operation["start_value"], left_operation["dest_value"], False, expandCurve)
+                frameValue = left_operation["dest_value"]
                 print("frameValue", frameValue)
             else:
                 frameValue = expand_objects[expandId]["initial_value"]
             print("setsquare", int((res[0]/hexagonsPerRing)*hexIdx), int((res[1]/ringsCount)*ringIdx), int(res[0]//hexagonsPerRing), int(res[1]//ringsCount), c4d.Vector(frameValue*255, 0, 0))
             SetSquare(texture,
-                int((res[0]/hexagonsPerRing*5)*hexIdx), int(res[1] - (res[1]/ringsCount)*ringIdx), 
-                int(res[0]/hexagonsPerRing*5), int(res[1]/ringsCount), 
-                c4d.Vector(frameValue*255, 0, 0))
+                int((res[0]/hexagonsPerRing)*hexIdx), int(res[1] - int(res[1]/ringsCount)*ringIdx), 
+                int(res[0]/hexagonsPerRing), int(res[1]/ringsCount), 
+                c4d.Vector(hexIdx/hexagonsPerRing*255*0, ringIdx/ringsCount*255*0, frameValue*255))
         texture.Save(filePath, c4d.FILTER_PNG)
 
 def create_hexagon(center_x, center_y, radius):
