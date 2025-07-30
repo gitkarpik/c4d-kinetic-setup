@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.3.2 (Alpha)
-# done beta PNG export
+# Version 0.3.3 (Alpha)
+# working on json export namings and format
 
 
 
@@ -335,17 +335,17 @@ def SaveJsonData(doc, filtered_data):
     # Group operations by row and type
     for key, data in filtered_data.items():
         if key.startswith("expand_"):
-            type_name = "expand"
+            type_name = "pusher"
             index = int(key.split("_")[1])
             motor_id = "id_" + str(index%10 + 1)
             row_index = (index//10) + 1 # Calculate which row this belongs to
         elif key.startswith("up_"):
-            type_name = "lift"
+            type_name = "jack"
             index = int(key.split("_")[1])
             motor_id = "id_" + str(index + 1)
             row_index = index + 1  # Row index is directly in the key
         elif key.startswith("rotation_"):
-            type_name = "rotation"
+            type_name = "tilt"
             index = int(key.split("_")[1])
             motor_id = "id_" + str(index%hexagonsPerRing + 1)
             row_index = index // hexagonsPerRing + 1  # Calculate which row this belongs to
@@ -371,9 +371,21 @@ def SaveJsonData(doc, filtered_data):
             if motor_id not in new_data["data"][row_key][type_name]:
                 new_data["data"][row_key][type_name][motor_id] = []
             op_id = f"op_{i+1}"
+            if type_name == "jack":
+                operation["start_value"] = round(operation["start_value"] * 3)
+                operation["dest_value"] = round(operation["dest_value"] * 3)
+            if type_name == "tilt":
+                operation["start_value"] = round(operation["start_value"] - 0.5, 2) 
+                operation["dest_value"] = round(operation["dest_value"] - 0.5, 2) 
+            
             # Convert animation_length from frames to seconds
-            if "animation_length" in operation:
-                operation["animation_length"] = round(operation["animation_length"] / fps, 2)
+            #if "animation_length" in operation:
+            #    operation["animation_length"] = round(operation["animation_length"] / fps, 2)
+            
+            # Remove the "valid" field from the operation
+            if "valid" in operation:
+                del operation["valid"]
+            
             new_data["data"][row_key][type_name][motor_id].append(operation)
 
     # Save the JSON data to file
