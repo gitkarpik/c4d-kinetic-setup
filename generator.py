@@ -10,12 +10,13 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.3.3 (Alpha)
-# working on json export namings and format
+# Version 0.4.1 (Alpha)
+# add restrictions for rotation
 
 
 
 #todo:
+#sync json export with Max - prepare basic animations
 
 #add refresh on export settings update!
 # add auto rotation field
@@ -254,8 +255,65 @@ def GetFieldData():
 
             for i in range(len(samples)):
                 current_value = samples[i]
+                prev_value = prev_values[name][i]
+                if name == "rotation":
+                    # Calculate corresponding up index - rotation prefix number divided by hexagonsPerRing
+                    rot_index = int(i)
+                    up_index = rot_index // hexagonsPerRing
+                    field_key_up = f"up_{up_index}"
+                    
+                    # Find the last UP command for this index
+                    up_value = field_data[field_key_up]["operations"][0]["initial_value"]
+                    #print(field_data[field_key_up]["operations"])
 
-                if abs(current_value - prev_frame_values[name][i]) > 0.001:
+                    if field_key_up in field_data:
+                        for operation in reversed(field_data[field_key_up]["operations"]):
+                            #print(f"Operation: {operation} field_key_up: {field_key_up}")
+                            if "dest_value" in operation and operation["frame"] <= frame:
+                                up_value = operation["dest_value"]
+                                #print(f"Up value: {up_value}")
+                                break
+
+                    field_key_up_2 = f"up_{max(up_index - 1, 1)}"
+                    up_value_2 = field_data[field_key_up_2]["operations"][0]["initial_value"]
+                    if field_key_up_2 in field_data:
+                        for operation in reversed(field_data[field_key_up_2]["operations"]):
+                            if "dest_value" in operation and operation["frame"] <= frame:
+                                up_value_2 = operation["dest_value"]
+                                break
+                    min_up_value = min(up_value, up_value_2)
+                    min_up_value = up_value
+
+                    # Check expansion value for this row
+                    expand_index = rot_index // 5
+                    field_key_expand = f"expand_{expand_index}"
+                    expand_value = field_data[field_key_expand]["operations"][0]["initial_value"]
+                    
+                    if field_key_expand in field_data:
+                        for operation in reversed(field_data[field_key_expand]["operations"]):
+                            if "dest_value" in operation and operation["frame"] <= frame:
+                                expand_value = operation["dest_value"]
+                                break
+
+                    if min_up_value is not None:
+                        if min_up_value < 0.333:
+                            current_val_clamped = 0.5  # Fixed at 0 degree
+                        elif min_up_value < 0.666:
+                            current_val_clamped = min(max(current_value, 0.4), 0.6)  # +- 10 degree
+                        else:
+                            current_val_clamped = min(max(current_value, 0.17), 0.82)  # +- 30 degree
+                            if expand_value > 0.2:
+                                current_val_clamped = current_value  # No clamp (45 deg)
+                                        
+
+                    current_value = current_val_clamped
+                    #prev_value = prev_val_clamped
+                    #current_value = 0.5
+                        # Update the samples with clamped value
+                        #frame_samples[name][i] = current_value
+                        
+                if abs(current_value - prev_frame_values[name][i]) > 0.0101:
+
                     change_magnitude = abs(current_value - prev_values[name][i])
                     animation_length = max(int(change_magnitude * anim_length), 1)
 
@@ -263,10 +321,12 @@ def GetFieldData():
                     if active_animations[name][i] is not None and frame < active_animations[name][i]:
                         is_valid = False
 
+
+
                     field_key = f"{prefix}{i}"
                     field_data[field_key]["operations"].append({
                         "frame": frame,
-                        "start_value": prev_values[name][i],
+                        "start_value": prev_value,
                         "dest_value": current_value,
                         "animation_length": animation_length,
                         "valid": is_valid
@@ -342,7 +402,7 @@ def SaveJsonData(doc, filtered_data):
         elif key.startswith("up_"):
             type_name = "jack"
             index = int(key.split("_")[1])
-            motor_id = "id_" + str(index + 1)
+            motor_id = "id_1" #+ str(index + 1)
             row_index = index + 1  # Row index is directly in the key
         elif key.startswith("rotation_"):
             type_name = "tilt"
@@ -1130,7 +1190,7 @@ def main():
     #UVWTag.SetSlow(1, hex_uvs[0], hex_uvs[3], hex_uvs[4], hex_uvs[5])
 
 
-    #hexagon_template[c4d.ID_BASEOBJECT_USECOLOR] = c4d.ID_BASEOBJECT_USECOLOR_ALWAYS
+    hexagon_template[c4d.ID_BASEOBJECT_USECOLOR] = c4d.ID_BASEOBJECT_USECOLOR_AUTOMATIC
     #hexagon_template[c4d.ID_BASEOBJECT_COLOR] = c4d.Vector(color_ok)
     my_uvs = []
     uvHScale = -2.18159
