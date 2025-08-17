@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.4.1 (Alpha)
-# add restrictions for rotation
+# Version 0.4.2 (Alpha)
+# crop timing to c4d preview range
 
 
 
@@ -261,7 +261,7 @@ def GetFieldData():
                     rot_index = int(i)
                     up_index = rot_index // hexagonsPerRing
                     field_key_up = f"up_{up_index}"
-                    
+
                     # Find the last UP command for this index
                     up_value = field_data[field_key_up]["operations"][0]["initial_value"]
                     #print(field_data[field_key_up]["operations"])
@@ -288,7 +288,7 @@ def GetFieldData():
                     expand_index = rot_index // 5
                     field_key_expand = f"expand_{expand_index}"
                     expand_value = field_data[field_key_expand]["operations"][0]["initial_value"]
-                    
+
                     if field_key_expand in field_data:
                         for operation in reversed(field_data[field_key_expand]["operations"]):
                             if "dest_value" in operation and operation["frame"] <= frame:
@@ -304,14 +304,14 @@ def GetFieldData():
                             current_val_clamped = min(max(current_value, 0.17), 0.82)  # +- 30 degree
                             if expand_value > 0.2:
                                 current_val_clamped = current_value  # No clamp (45 deg)
-                                        
+
 
                     current_value = current_val_clamped
                     #prev_value = prev_val_clamped
                     #current_value = 0.5
                         # Update the samples with clamped value
                         #frame_samples[name][i] = current_value
-                        
+
                 if abs(current_value - prev_frame_values[name][i]) > 0.0101:
 
                     change_magnitude = abs(current_value - prev_values[name][i])
@@ -349,7 +349,7 @@ def GetFieldData():
     end_time = time.time()
     time_diff = end_time - processing_start_time
     print(f"Field data processing completed in {time_diff:.2f} seconds")
-    print(field_data)
+    #print(field_data)
     return field_data
 
 def SaveJsonData(doc, filtered_data):
@@ -362,9 +362,9 @@ def SaveJsonData(doc, filtered_data):
 
     renderData = doc.GetActiveRenderData()
     renderSettings = renderData.GetDataInstance()
-    frame = doc.GetTime().GetFrame(doc.GetFps()) 
+    frame = doc.GetTime().GetFrame(doc.GetFps())
     rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': frame}
-    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,32], rpd) + '.json')) 
+    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,32], rpd) + '.json'))
     directory = os.path.dirname(filePath)
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -388,6 +388,7 @@ def SaveJsonData(doc, filtered_data):
             "created_at": current_time,
             "version": "1",
             "total_frames": total_frames,
+            "start_frame": doc.GetLoopMinTime().GetFrame(fps),
             "fps": fps
         }
     }
@@ -435,17 +436,19 @@ def SaveJsonData(doc, filtered_data):
                 operation["start_value"] = round(operation["start_value"] * 3)
                 operation["dest_value"] = round(operation["dest_value"] * 3)
             if type_name == "tilt":
-                operation["start_value"] = round(operation["start_value"] - 0.5, 2) 
-                operation["dest_value"] = round(operation["dest_value"] - 0.5, 2) 
-            
+                operation["start_value"] = round(operation["start_value"] - 0.5, 2)
+                operation["dest_value"] = round(operation["dest_value"] - 0.5, 2)
+
+            operation["frame"] = operation["frame"] - doc.GetLoopMinTime().GetFrame(fps)
+
             # Convert animation_length from frames to seconds
             #if "animation_length" in operation:
             #    operation["animation_length"] = round(operation["animation_length"] / fps, 2)
-            
+
             # Remove the "valid" field from the operation
             if "valid" in operation:
                 del operation["valid"]
-            
+
             new_data["data"][row_key][type_name][motor_id].append(operation)
 
     # Save the JSON data to file
@@ -932,21 +935,21 @@ def DrawPoly(texture, points, color):
     max_x = max(p[0] for p in points)
     min_y = min(p[1] for p in points)
     max_y = max(p[1] for p in points)
-    
+
     # For each pixel in bounding box
     for x in range(int(min_x), int(max_x)+1):
         for y in range(int(min_y), int(max_y)+1):
             inside = False
             j = len(points) - 1
-            
+
             # Ray casting algorithm to determine if point is inside polygon
             for i in range(len(points)):
                 if ((points[i][1] > y) != (points[j][1] > y) and
-                    x < (points[j][0] - points[i][0]) * (y - points[i][1]) / 
+                    x < (points[j][0] - points[i][0]) * (y - points[i][1]) /
                     (points[j][1] - points[i][1]) + points[i][0]):
                     inside = not inside
                 j = i
-                    
+
             if inside:
                 texture.SetPixel(x, y, int(color[0]), int(color[1]), int(color[2]))
 
@@ -969,7 +972,7 @@ def SaveImageSequence(field_data):
     #plan for the function:
     #for all frames in range - run a loop
     #then for each field data (expand, up, rotation) - find closest keyframe, from the left and from the right
-    #interpolate them with corresponding curves from user data 
+    #interpolate them with corresponding curves from user data
     #write onto pixel map, using the uv coordinates of the hexagon
 
     # Map field data keys to object indices
@@ -998,15 +1001,15 @@ def SaveImageSequence(field_data):
 
     # Create directory if it doesn't exist
     rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': startFrame}
-    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png')) 
+    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png'))
     directory = os.path.dirname(filePath)
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-        
+
     for fr in range(startFrame, endFrame):
         rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': fr}
-        filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png')) 
+        filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,24], rpd) + '.png'))
 
         texture = c4d.bitmaps.BaseBitmap()
         texture.Init(res[0], res[1])
@@ -1034,8 +1037,8 @@ def SaveImageSequence(field_data):
                 #print(left_frame, left_frame + int(left_operation["animation_length"]*fps))
                 frClamped = max(left_frame, min(fr, left_frame + int(left_operation["animation_length"])))
                 #find current frame of the expand movement
-                frameValue = c4d.utils.RangeMap(frClamped, 
-                    left_frame, left_frame + int(left_operation["animation_length"]), 
+                frameValue = c4d.utils.RangeMap(frClamped,
+                    left_frame, left_frame + int(left_operation["animation_length"]),
                     left_operation["start_value"], left_operation["dest_value"], False, expandCurve)
                 #frameValue = left_operation["dest_value"]
                 print("frameValue", frameValue)
@@ -1077,15 +1080,15 @@ def SaveImageSequence(field_data):
                 (my_uvs[4] + offUv) * mult,
                 (my_uvs[3] + offUv) * mult,
             ]
-            pixelUvs = []   
+            pixelUvs = []
             for uv in polyUvs:
                 pixelUvs.append(c4d.Vector(round(uv.x * res[0]), round(uv.y * res[1]), 0))
             DrawPoly(texture, pixelUvs, c4d.Vector(frameValue*255, 0, 0))
 
             #print("setsquare", int((res[0]/hexagonsPerRing)*hexIdx), int((res[1]/ringsCount)*ringIdx), int(res[0]//hexagonsPerRing), int(res[1]//ringsCount), c4d.Vector(frameValue*255, 0, 0))
             #DrawSquare(texture,
-            #    int((res[0]/hexagonsPerRing)*hexIdx), int(res[1] - int(res[1]/ringsCount)*ringIdx), 
-            #    int(res[0]/hexagonsPerRing), int(res[1]/ringsCount), 
+            #    int((res[0]/hexagonsPerRing)*hexIdx), int(res[1] - int(res[1]/ringsCount)*ringIdx),
+            #    int(res[0]/hexagonsPerRing), int(res[1]/ringsCount),
             #    c4d.Vector(hexIdx/hexagonsPerRing*255*0, ringIdx/ringsCount*255*0, frameValue*255))
         texture.Save(filePath, c4d.FILTER_PNG)
 
