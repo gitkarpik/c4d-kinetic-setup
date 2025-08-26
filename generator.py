@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.4.2 (Alpha)
-# crop timing to c4d preview range
+# Version 0.4.4 (Alpha)
+# new JSON export format
 
 
 
@@ -387,8 +387,13 @@ def SaveJsonData(doc, filtered_data):
         "info": {
             "created_at": current_time,
             "version": "1",
+            "export_range": {
+                "start_frame": doc.GetLoopMinTime().GetFrame(fps),
+                "end_frame": doc.GetLoopMaxTime().GetFrame(fps)
+            },
             "total_frames": total_frames,
-            "start_frame": doc.GetLoopMinTime().GetFrame(fps),
+            "part" : 1,
+            "total_parts": 1,
             "fps": fps
         }
     }
@@ -441,6 +446,18 @@ def SaveJsonData(doc, filtered_data):
 
             operation["frame"] = operation["frame"] - doc.GetLoopMinTime().GetFrame(fps)
 
+            start_val = operation["start_value"]
+            dest_val = operation["dest_value"]
+            length_val = operation["animation_length"]
+            frame = operation["frame"]
+            new_op = {
+                "frame": frame,
+                "start": start_val,
+                "dest": dest_val,
+                "length": length_val,
+            }
+
+
             # Convert animation_length from frames to seconds
             #if "animation_length" in operation:
             #    operation["animation_length"] = round(operation["animation_length"] / fps, 2)
@@ -449,7 +466,8 @@ def SaveJsonData(doc, filtered_data):
             if "valid" in operation:
                 del operation["valid"]
 
-            new_data["data"][row_key][type_name][motor_id].append(operation)
+            #new_data["data"][row_key][type_name][motor_id].append(operation)
+            new_data["data"][row_key][type_name][motor_id].append(new_op)
 
     # Save the JSON data to file
     with open(output_path, 'w') as f:
@@ -490,7 +508,11 @@ def SaveFieldDataToJson(field_data):
         # Create a readable message listing all frames with invalid operations
         invalid_frames_message = "Invalid operations found at frames:\n"
         for frame, count in sorted(invalid_frames.items()):
-            invalid_frames_message += f"Frame {frame}: {count}\n"
+            if len(invalid_frames_message.split('\n')) < 15:
+                invalid_frames_message += f"Frame {frame}: {count}\n"
+            else:
+                invalid_frames_message += "..."
+
         invalid_frames_message += "\nExport data anyway?"
         #print(invalid_frames_message)
         dialog = c4d.gui.MessageDialog(invalid_frames_message, c4d.GEMB_OKCANCEL)
