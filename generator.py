@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.4.5 (Alpha)
-# new JSON export format
+# Version 0.4.6 (Alpha)
+# fixed initial jack positions on first ring
 
 
 
@@ -233,7 +233,7 @@ def GetFieldData():
                     field_data[field_key]["operations"].append({"initial_value": frame_samples[name][i]})
 
 
-        frame_samples["up"][0] = 0.0 #fixate lover ring to floor
+        frame_samples["up"][0] = field_data["up_0"]["operations"][0]["initial_value"]
         all_samples[frame] = frame_samples
 
         sample_time += time.time() - sample_start_time
@@ -1301,7 +1301,11 @@ def main():
             )
 
             base_transform_matrix = base_transform_matrix * c4d.utils.MatrixRotY(angle + math.pi / 2.)
-            rotAngle = c4d.utils.RangeMap(sampRot._value[i], 0., 1., -45., 45., False) * math.pi / 180
+
+            myRot = sampRot._value[i]
+            if rotExpand == 0: #clap to 30 degree if Tilt Expand disabled
+                myRot = min(max(myRot, 0.17), 0.82)
+            rotAngle = c4d.utils.RangeMap(myRot, 0., 1., -45., 45., False) * math.pi / 180
             transform_matrix = base_transform_matrix * c4d.utils.MatrixRotX(rotAngle)
 
             poly_obj.SetMg(transform_matrix)
