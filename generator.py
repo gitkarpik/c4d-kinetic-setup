@@ -10,7 +10,7 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.4.4 (Alpha)
+# Version 0.4.5 (Alpha)
 # new JSON export format
 
 
@@ -35,6 +35,8 @@ expandCurve = op[c4d.ID_USERDATA, 6]
 rotTime = op[c4d.ID_USERDATA, 8] * doc.GetFps()
 rotCoolDown = op[c4d.ID_USERDATA, 28] * doc.GetFps()
 rotCurve = op[c4d.ID_USERDATA, 21]
+
+rotExpand = op[c4d.ID_USERDATA, 38] #thats a checkbox boolean, if crop to 30 or 45 degree
 
 upTime = op[c4d.ID_USERDATA, 29] * doc.GetFps()
 upCoolDown = op[c4d.ID_USERDATA, 30] * doc.GetFps()
@@ -302,7 +304,7 @@ def GetFieldData():
                             current_val_clamped = min(max(current_value, 0.4), 0.6)  # +- 10 degree
                         else:
                             current_val_clamped = min(max(current_value, 0.17), 0.82)  # +- 30 degree
-                            if expand_value > 0.2:
+                            if expand_value > 0.2 and rotExpand == 1:
                                 current_val_clamped = current_value  # No clamp (45 deg)
 
 
@@ -320,8 +322,6 @@ def GetFieldData():
                     is_valid = True
                     if active_animations[name][i] is not None and frame < active_animations[name][i]:
                         is_valid = False
-
-
 
                     field_key = f"{prefix}{i}"
                     field_data[field_key]["operations"].append({
@@ -669,6 +669,12 @@ def Bake(field_data):
                 doc = doc)[0]
     baked_gen.SetName(op.GetName() + "_Baked")
     doc.InsertObject(baked_gen)
+    # Remove material tag from baked generator
+    mat_tag = baked_gen.GetTag(c4d.Ttexture)
+    if mat_tag and uvScreens == False:
+        mat_tag.Remove()
+
+    
     visNull = baked_gen.GetDown().GetNext()
     if(visNull):
         visNull.Remove()
@@ -797,7 +803,7 @@ def Bake(field_data):
                 anim_length = max(op_data["animation_length"], 1)
 
                 # Calculate rotation value based on position
-                rotXAngle = c4d.utils.RangeMap(field_start_value, 0., 1., -40., 40., False) * math.pi / 180
+                rotXAngle = c4d.utils.RangeMap(field_start_value, 0., 1., -45., 45., False) * math.pi / 180
 
                 # Calculate base Y rotation based on hexagon position
                 angle = (2 * math.pi / hexCount) * hexIdx * ringsCount
@@ -812,7 +818,7 @@ def Bake(field_data):
                 initial_hpb = c4d.utils.MatrixToHPB(matrix * matrix_y * matrix_x)
 
 
-                rotXAngle = c4d.utils.RangeMap(field_dest_value, 0., 1., -40., 40., False) * math.pi / 180
+                rotXAngle = c4d.utils.RangeMap(field_dest_value, 0., 1., -45., 45., False) * math.pi / 180
 
                 matrix = c4d.Matrix()
                 matrix_y = c4d.utils.MatrixRotY(baseYAngle)
@@ -929,7 +935,7 @@ def Bake(field_data):
 def message(id, data):
     if(id==c4d.MSG_DESCRIPTION_POSTSETPARAMETER):
         flId = eval(str(data['descid']))[1][0]
-        if flId in [2, 4, 5, 20, 16, 24, 25, 26, 27,7,6,8,28,21,29,30,17]:
+        if flId in [2, 4, 5, 20, 16, 24, 25, 26, 27,7,6,8,28,21,29,30,17,38]:
             c4d.CallButton(op, c4d.OPYTHON_MAKEDIRTY)
             #fieldListExpand = op[c4d.ID_USERDATA, 2]
             #fieldListUp = op[c4d.ID_USERDATA, 4]
@@ -1295,7 +1301,7 @@ def main():
             )
 
             base_transform_matrix = base_transform_matrix * c4d.utils.MatrixRotY(angle + math.pi / 2.)
-            rotAngle = c4d.utils.RangeMap(sampRot._value[i], 0., 1., -40., 40., False) * math.pi / 180
+            rotAngle = c4d.utils.RangeMap(sampRot._value[i], 0., 1., -45., 45., False) * math.pi / 180
             transform_matrix = base_transform_matrix * c4d.utils.MatrixRotX(rotAngle)
 
             poly_obj.SetMg(transform_matrix)
