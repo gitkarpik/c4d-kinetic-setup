@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.4.7 (Alpha)
-# fixed rotation of lower ring
+# Version 0.5.0 (Alpha)
+# added split export to json + ui counter of parts
 
 
 
@@ -50,6 +50,7 @@ uvScreens = op[c4d.ID_USERDATA, 20]
 displayHelpers = op[c4d.ID_USERDATA, 25]
 colorHelpers = op[c4d.ID_USERDATA, 26]
 
+jsonPartsCount = op[c4d.ID_USERDATA, 39]
 
 ringsCount = 30
 hexagonsPerRing = 50
@@ -362,124 +363,139 @@ def SaveJsonData(doc, filtered_data):
     # Get the path of the current C4D project file
     project_path = doc.GetDocumentPath()
     project_name = doc.GetDocumentName()
-    # Create the output file path in the same directory
-    output_filename = "" + project_name[:-4] + ".json"
-
 
     renderData = doc.GetActiveRenderData()
     renderSettings = renderData.GetDataInstance()
     frame = doc.GetTime().GetFrame(doc.GetFps())
     rpd = {'_doc': doc, '_rData': renderData, '_rBc': renderSettings, '_frame': frame}
-    filePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,32], rpd) + '.json'))
-    directory = os.path.dirname(filePath)
+    baseFilePath = os.path.normpath(os.path.join(doc.GetDocumentPath(), FilenameConvertTokens(op[c4d.ID_USERDATA,32], rpd)))
+    directory = os.path.dirname(baseFilePath)
     if not os.path.exists(directory):
         os.makedirs(directory)
-
-
-    output_path = filePath
 
     # Reorganize data into the new format
     fps = doc.GetFps()
     total_frames = doc.GetLoopMaxTime().GetFrame(fps) - doc.GetLoopMinTime().GetFrame(fps) + 1
-
+    jsonPartsCount = op[c4d.ID_USERDATA, 39]
+    total_parts = jsonPartsCount
+    
     # Get current timestamp
     current_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # Create the new data structure
-    new_data = {
-        "name": project_name[:-4],
-        "type": "kinematic_preset",
-        "data": {},
-        "info": {
-            "created_at": current_time,
-            "version": "1",
-            "export_range": {
-                "start_frame": doc.GetLoopMinTime().GetFrame(fps),
-                "end_frame": doc.GetLoopMaxTime().GetFrame(fps)
-            },
-            "total_frames": total_frames,
-            "part" : 1,
-            "total_parts": 1,
-            "fps": fps
-        }
-    }
+    # Calculate frame ranges for each part
+    frames_per_part = total_frames // total_parts
+    remainder_frames = total_frames % total_parts
+    
+    part_ranges = []
+    current_frame = 0
+    for part in range(total_parts):
+        part_frame_count = frames_per_part + (1 if part < remainder_frames else 0)
+        part_start = current_frame
+        part_end = current_frame + part_frame_count - 1
+        part_ranges.append((part_start, part_end))
+        current_frame += part_frame_count
 
-    # Group operations by row and type
-    for key, data in filtered_data.items():
-        if key.startswith("expand_"):
-            type_name = "pusher"
-            index = int(key.split("_")[1])
-            motor_id = "id_" + str(index%10 + 1)
-            row_index = (index//10) + 1 # Calculate which row this belongs to
-        elif key.startswith("up_"):
-            type_name = "jack"
-            index = int(key.split("_")[1])
-            motor_id = "id_1" #+ str(index + 1)
-            row_index = index + 1  # Row index is directly in the key
-        elif key.startswith("rotation_"):
-            type_name = "tilt"
-            index = int(key.split("_")[1])
-            motor_id = "id_" + str(index%hexagonsPerRing + 1)
-            row_index = index // hexagonsPerRing + 1  # Calculate which row this belongs to
-        else:
-            continue
-
-        row_key = f"row_{row_index}"
-
-        # Create row if it doesn't exist
-        if row_key not in new_data["data"]:
-            new_data["data"][row_key] = {}
-
-        # Create type if it doesn't exist
-        if type_name not in new_data["data"][row_key]:
-            new_data["data"][row_key][type_name] = {}
-
-
-
-        # Add operations
-        for i, operation in enumerate(data["operations"]):
-            if "initial_value" in operation:
-                continue
-            if motor_id not in new_data["data"][row_key][type_name]:
-                new_data["data"][row_key][type_name][motor_id] = []
-            op_id = f"op_{i+1}"
-            if type_name == "jack":
-                operation["start_value"] = round(operation["start_value"] * 3)
-                operation["dest_value"] = round(operation["dest_value"] * 3)
-            if type_name == "tilt":
-                operation["start_value"] = round(operation["start_value"] - 0.5, 2)
-                operation["dest_value"] = round(operation["dest_value"] - 0.5, 2)
-
-            operation["frame"] = operation["frame"] - doc.GetLoopMinTime().GetFrame(fps)
-
-            start_val = operation["start_value"]
-            dest_val = operation["dest_value"]
-            length_val = operation["animation_length"]
-            frame = operation["frame"]
-            new_op = {
-                "frame": frame,
-                "start": start_val,
-                "dest": dest_val,
-                "length": length_val,
+    # Process each part
+    for part_num in range(total_parts):
+        part_start_frame, part_end_frame = part_ranges[part_num]
+        
+        # Create the new data structure for this part
+        new_data = {
+            "name": project_name[:-4],
+            "type": "kinematic_preset",
+            "data": {},
+            "info": {
+                "created_at": current_time,
+                "version": "1",
+                "export_range": {
+                    "start_frame": doc.GetLoopMinTime().GetFrame(fps) + part_start_frame,
+                    "end_frame": doc.GetLoopMinTime().GetFrame(fps) + part_end_frame
+                },
+                "total_frames": total_frames,
+                "part": part_num + 1,
+                "total_parts": total_parts,
+                "fps": fps
             }
+        }
 
+        for key, data in filtered_data.items():
+            if key.startswith("expand_"):
+                type_name = "pusher"
+                index = int(key.split("_")[1])
+                motor_id = "id_" + str(index%10 + 1)
+                row_index = (index//10) + 1 
+            elif key.startswith("up_"):
+                type_name = "jack"
+                index = int(key.split("_")[1])
+                motor_id = "id_1" #+ str(index + 1)
+                row_index = index + 1 
+            elif key.startswith("rotation_"):
+                type_name = "tilt"
+                index = int(key.split("_")[1])
+                motor_id = "id_" + str(index%hexagonsPerRing + 1)
+                row_index = index // hexagonsPerRing + 1 
+            else:
+                continue
 
-            # Convert animation_length from frames to seconds
-            #if "animation_length" in operation:
-            #    operation["animation_length"] = round(operation["animation_length"] / fps, 2)
+            row_key = f"row_{row_index}"
 
-            # Remove the "valid" field from the operation
-            if "valid" in operation:
-                del operation["valid"]
+            # Create row if it doesn't exist
+            if row_key not in new_data["data"]:
+                new_data["data"][row_key] = {}
 
-            #new_data["data"][row_key][type_name][motor_id].append(operation)
-            new_data["data"][row_key][type_name][motor_id].append(new_op)
+            # Create type if it doesn't exist
+            if type_name not in new_data["data"][row_key]:
+                new_data["data"][row_key][type_name] = {}
 
-    # Save the JSON data to file
-    with open(output_path, 'w') as f:
-        json.dump(new_data, f, indent=4)
+            # Add operations that fall within this part's frame range
+            for i, operation in enumerate(data["operations"]):
+                if "initial_value" in operation:
+                    continue
+                
+                # Check if operation falls within this part's frame range
+                operation_frame = operation["frame"] - doc.GetLoopMinTime().GetFrame(fps)
+                if operation_frame < part_start_frame or operation_frame > part_end_frame:
+                    continue
+                
+                if motor_id not in new_data["data"][row_key][type_name]:
+                    new_data["data"][row_key][type_name][motor_id] = []
+                
+                if type_name == "jack":
+                    operation["start_value"] = round(operation["start_value"] * 3)
+                    operation["dest_value"] = round(operation["dest_value"] * 3)
+                if type_name == "tilt":
+                    operation["start_value"] = round(operation["start_value"] - 0.5, 2)
+                    operation["dest_value"] = round(operation["dest_value"] - 0.5, 2)
 
-    print(f"Field data saved to: {output_path}")
+                operation["frame"] = operation["frame"] - doc.GetLoopMinTime().GetFrame(fps)
+
+                start_val = operation["start_value"]
+                dest_val = operation["dest_value"]
+                length_val = operation["animation_length"]
+                frame = operation["frame"]
+                new_op = {
+                    "frame": frame,
+                    "start": start_val,
+                    "dest": dest_val,
+                    "length": length_val,
+                }
+
+                # Remove the "valid" field from the operation
+                if "valid" in operation:
+                    del operation["valid"]
+
+                new_data["data"][row_key][type_name][motor_id].append(new_op)
+
+        # Create output path for this part
+        output_path = f"{baseFilePath}_{part_num + 1}_of_{total_parts}.json"
+        
+        # Save the JSON data to file
+        with open(output_path, 'w') as f:
+            json.dump(new_data, f, indent=4)
+
+        print(f"Field data saved to: {output_path}")
+
+    print(f"Exported {total_parts} JSON files")
 
 
 def SaveFieldDataToJson(field_data):
@@ -941,7 +957,7 @@ def Bake(field_data):
 def message(id, data):
     if(id==c4d.MSG_DESCRIPTION_POSTSETPARAMETER):
         flId = eval(str(data['descid']))[1][0]
-        if flId in [2, 4, 5, 20, 16, 24, 25, 26, 27,7,6,8,28,21,29,30,17,38]:
+        if flId in [2, 4, 5, 20, 16, 24, 25, 26, 27,7,6,8,28,21,29,30,17,38,39]:
             c4d.CallButton(op, c4d.OPYTHON_MAKEDIRTY)
             #fieldListExpand = op[c4d.ID_USERDATA, 2]
             #fieldListUp = op[c4d.ID_USERDATA, 4]
