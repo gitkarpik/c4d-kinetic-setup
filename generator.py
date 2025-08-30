@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.4.6 (Alpha)
-# fixed initial jack positions on first ring
+# Version 0.4.7 (Alpha)
+# fixed rotation of lower ring
 
 
 
@@ -221,7 +221,7 @@ def GetFieldData():
                 for i in range(len(samp._value)):
                     val = samp._value[i]
                     # Find closest snap point
-                    snap_points = [0.0, 0.333, 0.666, 1.0]
+                    snap_points = [0.0, 0.25, 0.5, 1.0]
                     closest = min(snap_points, key=lambda x: abs(x - val))
                     frame_samples[name][i] = closest
 
@@ -262,7 +262,7 @@ def GetFieldData():
                     # Calculate corresponding up index - rotation prefix number divided by hexagonsPerRing
                     rot_index = int(i)
                     up_index = rot_index // hexagonsPerRing
-                    field_key_up = f"up_{up_index}"
+                    field_key_up = f"up_{max(up_index, 1)}"
 
                     # Find the last UP command for this index
                     up_value = field_data[field_key_up]["operations"][0]["initial_value"]
@@ -298,9 +298,9 @@ def GetFieldData():
                                 break
 
                     if min_up_value is not None:
-                        if min_up_value < 0.333:
+                        if min_up_value < 0.25:
                             current_val_clamped = 0.5  # Fixed at 0 degree
-                        elif min_up_value < 0.666:
+                        elif min_up_value < 0.5:
                             current_val_clamped = min(max(current_value, 0.4), 0.6)  # +- 10 degree
                         else:
                             current_val_clamped = min(max(current_value, 0.17), 0.82)  # +- 30 degree
@@ -674,7 +674,7 @@ def Bake(field_data):
     if mat_tag and uvScreens == False:
         mat_tag.Remove()
 
-    
+
     visNull = baked_gen.GetDown().GetNext()
     if(visNull):
         visNull.Remove()
@@ -1206,7 +1206,7 @@ def main():
     sampRot = fieldListRot.SampleListSimple(op, inputFieldRot, c4d.FIELDSAMPLE_FLAG_VALUE)
     sampUp = fieldListUp.SampleListSimple(op, inputFieldUp, c4d.FIELDSAMPLE_FLAG_VALUE)
 
-    sampUpSnapped = [min([0.0, 0.333, 0.666, 1.0], key=lambda x: abs(x - val)) for val in sampUp._value]
+    sampUpSnapped = [min([0.0, 0.25, 0.5, 1.0], key=lambda x: abs(x - val)) for val in sampUp._value]
 
     hexagon_template = c4d.PolygonObject(hexPoints, 2)
     hexagon_pts, hex_uvs = create_hex_pts()
