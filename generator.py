@@ -272,19 +272,25 @@ def GetFieldData():
                         for operation in reversed(field_data[field_key_up]["operations"]):
                             #print(f"Operation: {operation} field_key_up: {field_key_up}")
                             if "dest_value" in operation and operation["frame"] <= frame:
-                                up_value = operation["dest_value"]
+                                start_val = operation["start_value"]
+                                dst_val = operation["dest_value"]
+                                up_value = start_val + (dst_val - start_val) * min(max(0, (frame - operation["frame"]) / operation["animation_length"]), 1)
                                 #print(f"Up value: {up_value}")
                                 break
 
-                    field_key_up_2 = f"up_{max(up_index - 1, 1)}"
+                    field_key_up_2 = f"up_{min(max(up_index + 1, 1), ringsCount - 1)}"
                     up_value_2 = field_data[field_key_up_2]["operations"][0]["initial_value"]
                     if field_key_up_2 in field_data:
                         for operation in reversed(field_data[field_key_up_2]["operations"]):
                             if "dest_value" in operation and operation["frame"] <= frame:
-                                up_value_2 = operation["dest_value"]
+                                start_val = operation["start_value"]
+                                dst_val = operation["dest_value"]
+                                up_value_2 = start_val + (dst_val - start_val) * min(max(0, (frame - operation["frame"]) / operation["animation_length"]), 1)
                                 break
+
+
                     min_up_value = min(up_value, up_value_2)
-                    min_up_value = up_value
+                    #min_up_value = up_value
 
                     # Check expansion value for this row
                     expand_index = rot_index // 5
