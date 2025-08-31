@@ -10,16 +10,9 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.5.0 (Alpha)
-# added split export to json + ui counter of parts
+# Version 0.5.1 (Alpha)
+# fixed camel case
 
-
-
-#todo:
-#sync json export with Max - prepare basic animations
-
-#add refresh on export settings update!
-# add auto rotation field
 
 
 
@@ -73,7 +66,7 @@ up_animation_length = upTime
 rotation_animation_length = rotTime
 
 
-def SetCurrentFrame(frame, doc):
+def set_current_frame(frame, doc):
     doc.SetTime(c4d.BaseTime(frame,doc.GetFps()))
     doc.ExecutePasses(None, True, True, True, 0)
     c4d.GeSyncMessage(c4d.EVMSG_TIMECHANGED)
@@ -109,7 +102,7 @@ def prepare_field_inputs(samplePosList, ringsCount, hexCount, ringHeight):
         "rotation": inputFieldRot
     }
 
-def GetFieldData():
+def get_field_data():
     # Record the start time to measure function execution time
     start_time = time.time()
     visibilityStatus = []
@@ -204,7 +197,7 @@ def GetFieldData():
     # Sample all frames in one go
     for frame in range(startFrame, endFrame + 1):
         sample_start_time = time.time()
-        SetCurrentFrame(frame, doc)
+        set_current_frame(frame, doc)
 
         frame_samples = {}
         for config in field_configs:
@@ -344,7 +337,7 @@ def GetFieldData():
                         prev_values[name][i] = current_value
                     prev_frame_values[name][i] = current_value
 
-    SetCurrentFrame(currentFrame, doc)
+    set_current_frame(currentFrame, doc)
 
     op[c4d.ID_USERDATA, 16] = visibilityStatus[0]
     op[c4d.ID_USERDATA, 19] = visibilityStatus[1]
@@ -359,7 +352,7 @@ def GetFieldData():
     #print(field_data)
     return field_data
 
-def SaveJsonData(doc, filtered_data):
+def save_json_data(doc, filtered_data):
     # Get the path of the current C4D project file
     project_path = doc.GetDocumentPath()
     project_name = doc.GetDocumentName()
@@ -498,7 +491,7 @@ def SaveJsonData(doc, filtered_data):
     print(f"Exported {total_parts} JSON files")
 
 
-def SaveFieldDataToJson(field_data):
+def save_field_data_to_json(field_data):
     doc = c4d.documents.GetActiveDocument()
 
     # Filter out invalid operations
@@ -539,23 +532,13 @@ def SaveFieldDataToJson(field_data):
         #print(invalid_frames_message)
         dialog = c4d.gui.MessageDialog(invalid_frames_message, c4d.GEMB_OKCANCEL)
         if dialog == c4d.GEMB_R_OK:
-            SaveJsonData(doc, filtered_data)
+            save_json_data(doc, filtered_data)
     else:
         print("No invalid operations found")
-        SaveJsonData(doc, filtered_data)
+        save_json_data(doc, filtered_data)
     return
 
 def set_error_color_keyframes(track, frame, fps, color_error, color_ok):
-    """
-    Sets error color keyframes for a given track at a specific frame.
-
-    Args:
-        track: The color track to add keyframes to
-        frame: The frame where the error occurs
-        fps: Frames per second of the document
-        color_error: The color value to use for error indication
-        color_ok: The color value to use for normal state
-    """
     curve = track.GetCurve()
     start_time = c4d.BaseTime(frame, fps)
     end_time = c4d.BaseTime(frame + 1, fps)
@@ -571,17 +554,6 @@ def set_error_color_keyframes(track, frame, fps, color_error, color_ok):
     key_end.SetInterpolation(curve, c4d.CINTERPOLATION_STEP)
 
 def add_keyframes_to_track(track, obj, start_frame, end_frame, start_value, end_value, remap_curve):
-    """
-    Adds keyframes to a track with specified start and end values.
-
-    Args:
-        track: The track to add keyframes to
-        obj: The object the track belongs to
-        start_time: The time for the start keyframe
-        end_time: The time for the end keyframe
-        start_value: The value for the start keyframe
-        end_value: The value for the end keyframe
-    """
     doc = c4d.documents.GetActiveDocument()
     fps = doc.GetFps()
     fps_mult = 100.
@@ -665,7 +637,7 @@ def Bake(field_data):
     baked_gen = doc.SearchObject(op.GetName() + "_Baked")
     if baked_gen:
         baked_gen.Remove()
-    SetCurrentFrame(startFrame, doc)
+    set_current_frame(startFrame, doc)
     # Create structure to remember visibility status
     visibilityStatus = []
 
@@ -965,21 +937,16 @@ def message(id, data):
     if id == c4d.MSG_DESCRIPTION_COMMAND:
         buttID = str(data['id']).split("), (")[1].split(", ")[0].strip("()")
         if(buttID=='9'):
-            field_data = GetFieldData()
+            field_data = get_field_data()
             Bake(field_data)
         elif(buttID=='10'):
-            field_data = GetFieldData()
-            SaveFieldDataToJson(field_data)
+            field_data = get_field_data()
+            save_field_data_to_json(field_data)
         elif(buttID=='23'):
-            field_data = GetFieldData()
-            SaveImageSequence(field_data)
+            field_data = get_field_data()
+            save_image_sequence(field_data)
 
-def DrawSquare(texture, x, y, w, h, color):
-    for i in range(x, x+w):
-        for j in range(y-h, y):
-            texture.SetPixel(i, j, int(color[0]), int(color[1]), int(color[2]))
-
-def DrawPoly(texture, points, color):
+def draw_poly(texture, points, color):
     # Find bounding box of polygon
     min_x = min(p[0] for p in points)
     max_x = max(p[0] for p in points)
@@ -1003,7 +970,7 @@ def DrawPoly(texture, points, color):
             if inside:
                 texture.SetPixel(x, y, int(color[0]), int(color[1]), int(color[2]))
 
-def SaveImageSequence(field_data):
+def save_image_sequence(field_data):
     #https://www.youtube.com/watch?v=R6_GQw-4tJY&t=310s
     #https://developers.maxon.net/docs/py/2024_0_0a/modules/c4d.modules/tokensystem/index.html
     #original resolution 2500x1150
@@ -1122,7 +1089,7 @@ def SaveImageSequence(field_data):
             pixelUvs = []
             for uv in polyUvs:
                 pixelUvs.append(c4d.Vector(round(uv.x * res[0]), round(uv.y * res[1]), 0))
-            DrawPoly(texture, pixelUvs, c4d.Vector(frameValue*255, 0, 0))
+            draw_poly(texture, pixelUvs, c4d.Vector(frameValue*255, 0, 0))
 
             polyUvs = [
                 (my_uvs[0] + offUv) * mult,
@@ -1133,13 +1100,7 @@ def SaveImageSequence(field_data):
             pixelUvs = []
             for uv in polyUvs:
                 pixelUvs.append(c4d.Vector(round(uv.x * res[0]), round(uv.y * res[1]), 0))
-            DrawPoly(texture, pixelUvs, c4d.Vector(frameValue*255, 0, 0))
-
-            #print("setsquare", int((res[0]/hexagonsPerRing)*hexIdx), int((res[1]/ringsCount)*ringIdx), int(res[0]//hexagonsPerRing), int(res[1]//ringsCount), c4d.Vector(frameValue*255, 0, 0))
-            #DrawSquare(texture,
-            #    int((res[0]/hexagonsPerRing)*hexIdx), int(res[1] - int(res[1]/ringsCount)*ringIdx),
-            #    int(res[0]/hexagonsPerRing), int(res[1]/ringsCount),
-            #    c4d.Vector(hexIdx/hexagonsPerRing*255*0, ringIdx/ringsCount*255*0, frameValue*255))
+            draw_poly(texture, pixelUvs, c4d.Vector(frameValue*255, 0, 0))
         texture.Save(filePath, c4d.FILTER_PNG)
 
 def create_hexagon(center_x, center_y, radius):
