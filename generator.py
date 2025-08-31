@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.5.1 (Alpha)
-# fixed camel case
+# Version 0.5.2 (Alpha)
+# fixed frame count in json export
 
 
 
@@ -465,7 +465,7 @@ def save_json_data(doc, filtered_data):
                 start_val = operation["start_value"]
                 dest_val = operation["dest_value"]
                 length_val = operation["animation_length"]
-                frame = operation["frame"]
+                frame = operation["frame"] - part_start_frame
                 new_op = {
                     "frame": frame,
                     "start": start_val,
