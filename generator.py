@@ -401,8 +401,8 @@ def save_json_data(doc, filtered_data):
                 "created_at": current_time,
                 "version": "1",
                 "export_range": {
-                    "start_frame": doc.GetLoopMinTime().GetFrame(fps) + part_start_frame,
-                    "end_frame": doc.GetLoopMinTime().GetFrame(fps) + part_end_frame
+                    "start": doc.GetLoopMinTime().GetFrame(fps) + part_start_frame,
+                    "end": doc.GetLoopMinTime().GetFrame(fps) + part_end_frame
                 },
                 "total_frames": total_frames,
                 "part": part_num + 1,
