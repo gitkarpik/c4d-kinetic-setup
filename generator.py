@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.5.2 (Alpha)
-# fixed frame count in json export
+# Version 0.5.6 (Alpha)
+# tilt switch cleanup
 
 
 
@@ -29,7 +29,7 @@ rotTime = op[c4d.ID_USERDATA, 8] * doc.GetFps()
 rotCoolDown = op[c4d.ID_USERDATA, 28] * doc.GetFps()
 rotCurve = op[c4d.ID_USERDATA, 21]
 
-rotExpand = op[c4d.ID_USERDATA, 38] #thats a checkbox boolean, if crop to 30 or 45 degree
+#rotExpand = op[c4d.ID_USERDATA, 38] #thats a checkbox boolean, if crop to 30 or 45 degree
 
 upTime = op[c4d.ID_USERDATA, 29] * doc.GetFps()
 upCoolDown = op[c4d.ID_USERDATA, 30] * doc.GetFps()
@@ -304,8 +304,9 @@ def get_field_data():
                             current_val_clamped = min(max(current_value, 0.4), 0.6)  # +- 10 degree
                         else:
                             current_val_clamped = min(max(current_value, 0.17), 0.82)  # +- 30 degree
-                            if expand_value > 0.2 and rotExpand == 1:
-                                current_val_clamped = current_value  # No clamp (45 deg)
+                            # 45 deg rotation disabled
+                            #if expand_value > 0.2 and rotExpand == 1:
+                                #current_val_clamped = current_value  # No clamp (45 deg)
 
 
                     current_value = current_val_clamped
@@ -371,14 +372,14 @@ def save_json_data(doc, filtered_data):
     total_frames = doc.GetLoopMaxTime().GetFrame(fps) - doc.GetLoopMinTime().GetFrame(fps) + 1
     jsonPartsCount = op[c4d.ID_USERDATA, 39]
     total_parts = jsonPartsCount
-    
+
     # Get current timestamp
     current_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
     # Calculate frame ranges for each part
     frames_per_part = total_frames // total_parts
     remainder_frames = total_frames % total_parts
-    
+
     part_ranges = []
     current_frame = 0
     for part in range(total_parts):
@@ -391,7 +392,7 @@ def save_json_data(doc, filtered_data):
     # Process each part
     for part_num in range(total_parts):
         part_start_frame, part_end_frame = part_ranges[part_num]
-        
+
         # Create the new data structure for this part
         new_data = {
             "name": project_name[:-4],
@@ -416,17 +417,17 @@ def save_json_data(doc, filtered_data):
                 type_name = "pusher"
                 index = int(key.split("_")[1])
                 motor_id = "id_" + str(index%10 + 1)
-                row_index = (index//10) + 1 
+                row_index = (index//10) + 1
             elif key.startswith("up_"):
                 type_name = "jack"
                 index = int(key.split("_")[1])
                 motor_id = "id_1" #+ str(index + 1)
-                row_index = index + 1 
+                row_index = index + 1
             elif key.startswith("rotation_"):
                 type_name = "tilt"
                 index = int(key.split("_")[1])
                 motor_id = "id_" + str(index%hexagonsPerRing + 1)
-                row_index = index // hexagonsPerRing + 1 
+                row_index = index // hexagonsPerRing + 1
             else:
                 continue
 
@@ -444,15 +445,15 @@ def save_json_data(doc, filtered_data):
             for i, operation in enumerate(data["operations"]):
                 if "initial_value" in operation:
                     continue
-                
+
                 # Check if operation falls within this part's frame range
                 operation_frame = operation["frame"] - doc.GetLoopMinTime().GetFrame(fps)
                 if operation_frame < part_start_frame or operation_frame > part_end_frame:
                     continue
-                
+
                 if motor_id not in new_data["data"][row_key][type_name]:
                     new_data["data"][row_key][type_name][motor_id] = []
-                
+
                 if type_name == "jack":
                     operation["start_value"] = round(operation["start_value"] * 3)
                     operation["dest_value"] = round(operation["dest_value"] * 3)
@@ -481,7 +482,7 @@ def save_json_data(doc, filtered_data):
 
         # Create output path for this part
         output_path = f"{baseFilePath}_{part_num + 1}_of_{total_parts}.json"
-        
+
         # Save the JSON data to file
         with open(output_path, 'w') as f:
             json.dump(new_data, f, indent=4)
@@ -1286,8 +1287,8 @@ def main():
             base_transform_matrix = base_transform_matrix * c4d.utils.MatrixRotY(angle + math.pi / 2.)
 
             myRot = sampRot._value[i]
-            if rotExpand == 0: #clap to 30 degree if Tilt Expand disabled
-                myRot = min(max(myRot, 0.17), 0.82)
+            #if rotExpand == 0: #clap to 30 degree
+            myRot = min(max(myRot, 0.17), 0.82)
             rotAngle = c4d.utils.RangeMap(myRot, 0., 1., -45., 45., False) * math.pi / 180
             transform_matrix = base_transform_matrix * c4d.utils.MatrixRotX(rotAngle)
 
