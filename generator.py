@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.5.6 (Alpha)
-# tilt switch cleanup
+# Version 0.5.7 (Alpha)
+# fix invalid operations dump to json
 
 
 
@@ -498,7 +498,7 @@ def save_field_data_to_json(field_data):
     # Filter out invalid operations
     filtered_data = {}
     # Flag to control filtering (can be changed to False to include invalid operations)
-    filter_invalid = False
+    filter_invalid = True
 
     # Track frames with invalid operations and count them
     invalid_frames = {}
