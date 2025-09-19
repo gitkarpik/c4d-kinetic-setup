@@ -38,8 +38,6 @@
 
 
 
-## Visualize
-
 ## Export
 
 ### Bake To Preview
@@ -62,11 +60,18 @@
   "data": {
     "row_1": {
       "pusher": {
-        "id_1": [{"frame": 0, "start": 0, "dest": 1, "length": 30}],
-         ...,
+        "id_1": [{"frame": 13, "start": 0, "dest": 1, "length": 80}],
+         "id_2": [...],
+         "id_3": [...],
       },
-      "tilt": {...},
-      "jack": {...}
+      "tilt": {
+        "id_1": [{"frame": 37, "start": 0.5, "dest": 1., "length": 20}],
+        "id_2": [...],
+        "id_3": [...],
+      },
+      "jack": {
+        "id_1": [{"frame": 52, "start": 0, "dest": 0.25, "length": 200}]
+      }
     }
   }
   "info": {
