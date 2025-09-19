@@ -65,7 +65,7 @@
          "id_3": [...],
       },
       "tilt": {
-        "id_1": [{"frame": 37, "start": 0.5, "dest": 1., "length": 20}],
+        "id_1": [{"frame": 37, "start": 0.5, "dest": 1, "length": 20}],
         "id_2": [...],
         "id_3": [...],
       },
