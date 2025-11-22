@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.5.8 (Alpha)
-# updated speeds
+# Version 0.5.9 (Alpha)
+# added init value 0-frame animation for empty tracks
 
 
 
@@ -412,6 +412,44 @@ def save_json_data(doc, filtered_data):
             }
         }
 
+        # Dictionary to store initial values for each (row_key, type_name, motor_id)
+        initial_values = {}
+
+        # First pass: collect initial values
+        for key, data in filtered_data.items():
+            if key.startswith("expand_"):
+                type_name = "pusher"
+                index = int(key.split("_")[1])
+                motor_id = "id_" + str(index%10 + 1)
+                row_index = (index//10) + 1
+            elif key.startswith("up_"):
+                type_name = "jack"
+                index = int(key.split("_")[1])
+                motor_id = "id_1"
+                row_index = index + 1
+            elif key.startswith("rotation_"):
+                type_name = "tilt"
+                index = int(key.split("_")[1])
+                motor_id = "id_" + str(index%hexagonsPerRing + 1)
+                row_index = index // hexagonsPerRing + 1
+            else:
+                continue
+
+            row_key = f"row_{row_index}"
+
+            # Find initial value in operations
+            for operation in data["operations"]:
+                if "initial_value" in operation:
+                    init_val = operation["initial_value"]
+                    # Apply transformations
+                    if type_name == "jack":
+                        init_val = round(init_val * 3)
+                    elif type_name == "tilt":
+                        init_val = round(init_val - 0.5, 2)
+                    initial_values[(row_key, type_name, motor_id)] = init_val
+                    break
+
+        # Second pass: process operations
         for key, data in filtered_data.items():
             if key.startswith("expand_"):
                 type_name = "pusher"
@@ -441,9 +479,11 @@ def save_json_data(doc, filtered_data):
             if type_name not in new_data["data"][row_key]:
                 new_data["data"][row_key][type_name] = {}
 
+
             # Add operations that fall within this part's frame range
             for i, operation in enumerate(data["operations"]):
                 if "initial_value" in operation:
+                    #print(f"Initial value: {operation['initial_value'], type_name}")
                     continue
 
                 # Check if operation falls within this part's frame range
@@ -479,6 +519,95 @@ def save_json_data(doc, filtered_data):
                     del operation["valid"]
 
                 new_data["data"][row_key][type_name][motor_id].append(new_op)
+
+        # Helper function to find initial value for a motor_id
+        def get_initial_value(row_key, type_name, motor_id):
+            # Check if we already collected it
+            if (row_key, type_name, motor_id) in initial_values:
+                return initial_values[(row_key, type_name, motor_id)]
+
+            # Search filtered_data for the corresponding key
+            row_index = int(row_key.split("_")[1])
+
+            if type_name == "pusher":
+                # motor_id is id_X where X = index%10 + 1, row = (index//10) + 1
+                motor_id_num = int(motor_id.split("_")[1])
+                # Find index where index%10 + 1 == motor_id_num and (index//10) + 1 == row_index
+                for index in range(hexCount // 5):
+                    if (index % 10 + 1 == motor_id_num) and ((index // 10) + 1 == row_index):
+                        key = f"expand_{index}"
+                        if key in filtered_data:
+                            for operation in filtered_data[key]["operations"]:
+                                if "initial_value" in operation:
+                                    return operation["initial_value"]
+            elif type_name == "jack":
+                # motor_id is always id_1, row = index + 1
+                index = row_index - 1
+                key = f"up_{index}"
+                if key in filtered_data:
+                    for operation in filtered_data[key]["operations"]:
+                        if "initial_value" in operation:
+                            init_val = operation["initial_value"]
+                            return round(init_val * 3)
+            elif type_name == "tilt":
+                # motor_id is id_X where X = index%hexagonsPerRing + 1, row = index // hexagonsPerRing + 1
+                motor_id_num = int(motor_id.split("_")[1])
+                # Find index where index%hexagonsPerRing + 1 == motor_id_num and index // hexagonsPerRing + 1 == row_index
+                for index in range(hexCount):
+                    if (index % hexagonsPerRing + 1 == motor_id_num) and (index // hexagonsPerRing + 1 == row_index):
+                        key = f"rotation_{index}"
+                        if key in filtered_data:
+                            for operation in filtered_data[key]["operations"]:
+                                if "initial_value" in operation:
+                                    init_val = operation["initial_value"]
+                                    return round(init_val - 0.5, 2)
+
+            # Default values if not found
+            if type_name == "tilt":
+                return 0.0  # 0.5 - 0.5 = 0
+            else:
+                return 0
+
+        # Ensure all motor_ids are present for each row and type, even if empty
+        for row_key in new_data["data"]:
+            row_data = new_data["data"][row_key]
+
+            # Ensure pusher has id_1 through id_10
+            if "pusher" in row_data:
+                for motor_id_num in range(1, 11):
+                    motor_id = f"id_{motor_id_num}"
+                    if motor_id not in row_data["pusher"]:
+                        init_val = get_initial_value(row_key, "pusher", motor_id)
+                        row_data["pusher"][motor_id] = [{
+                            "frame": 0,
+                            "start": init_val,
+                            "dest": init_val,
+                            "length": 0
+                        }]
+
+            # Ensure jack has id_1
+            if "jack" in row_data:
+                if "id_1" not in row_data["jack"]:
+                    init_val = get_initial_value(row_key, "jack", "id_1")
+                    row_data["jack"]["id_1"] = [{
+                        "frame": 0,
+                        "start": init_val,
+                        "dest": init_val,
+                        "length": 0
+                    }]
+
+            # Ensure tilt has id_1 through id_50
+            if "tilt" in row_data:
+                for motor_id_num in range(1, hexagonsPerRing + 1):
+                    motor_id = f"id_{motor_id_num}"
+                    if motor_id not in row_data["tilt"]:
+                        init_val = get_initial_value(row_key, "tilt", motor_id)
+                        row_data["tilt"][motor_id] = [{
+                            "frame": 0,
+                            "start": init_val,
+                            "dest": init_val,
+                            "length": 0
+                        }]
 
         # Create output path for this part
         output_path = f"{baseFilePath}_{part_num + 1}_of_{total_parts}.json"
