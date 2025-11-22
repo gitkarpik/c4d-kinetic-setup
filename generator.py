@@ -10,8 +10,8 @@ import c4d
 from c4d.modules.mograph import FieldInput, FieldInfo, FieldOutput
 from c4d.modules.tokensystem import FilenameConvertTokens
 
-# Version 0.5.7 (Alpha)
-# fix invalid operations dump to json
+# Version 0.5.8 (Alpha)
+# updated speeds
 
 
 
